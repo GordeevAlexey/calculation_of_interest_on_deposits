@@ -147,6 +147,8 @@ async def get_contrubution_summ(message: types.Message, state: FSMContext):
     user_data = await state.get_data()
     await message.answer(finish_math(user_data), parse_mode='HTML')
 
+    await state.finish()
+
 
 def finish_math(user_data):
     vklad_name = user_data.get("contribution_name")
@@ -191,9 +193,14 @@ def format_summ(summ):
     return '{0:,}'.format(summ).replace(',', ' ')
 
 
+async def cmd_cancel(message: types.Message, state: FSMContext):
+    await state.finish()
+    await message.answer("Действие отменено, начните заново /start", reply_markup=types.ReplyKeyboardRemove())
+
+
 def register_handlers_contribution(dp: Dispatcher):
     dp.register_message_handler(contribution_name_start, commands="start", state="*")
-
+    dp.register_message_handler(cmd_cancel, commands="cancel", state="*")
     dp.register_message_handler(get_contrubution_days,
                                 state=OrderContributionSelect.waiting_for_contribution_name)
     dp.register_message_handler(get_contrubution_where_percent,
