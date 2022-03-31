@@ -42,12 +42,13 @@ class DBContext:
             result.append(n[2])
         return result
 
-    def get_contribution_extra_option(self, name):
+    def get_contribution_extra_option(self, name, key_options):
+        args = (name, key_options)
         result = {}
-        self.cursor.execute(SQL_QUERY_GET_CONTRIBUTION_EXTRA_OPTION_TXT, [name])
+        self.cursor.execute(SQL_QUERY_GET_CONTRIBUTION_EXTRA_OPTION_TXT, args)
         record = self.cursor.fetchall()
         text_message = record[0][0]
-        self.cursor.execute(SQL_QUERY_GET_CONTRIBUTION_EXTRA_OPTION, [name])
+        self.cursor.execute(SQL_QUERY_GET_CONTRIBUTION_EXTRA_OPTION, args)
         record = self.cursor.fetchall()
         for n in record:
             result.update({n[0]: n[1]})

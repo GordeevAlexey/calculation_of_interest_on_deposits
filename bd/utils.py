@@ -11,10 +11,10 @@ SQL_QUERY_GET_CONTRIBUTION_PERCENT = f"select percent, extra_options, min_summa 
                                      f"name = ? and day = ? and chema_charges = ?"
 
 SQL_QUERY_GET_CONTRIBUTION_EXTRA_OPTION = f"select options, percent from extra_options where " \
-                                          f"contribution = ?"
+                                          f"contribution = ? and key_options = ?"
 
 SQL_QUERY_GET_CONTRIBUTION_EXTRA_OPTION_TXT = f"select distinct(text_message) from extra_options where " \
-                                          f"contribution = ?"
+                                          f"contribution = ? and key_options = ?"
 
 SQL_QUERY_GET_CONTRIBUTION_WHERE_PERCENT = f"select distinct(where_percent) from contribution_where_percent where " \
                                           f"contribution = ?"

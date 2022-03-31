@@ -16,6 +16,7 @@ class OrderContributionSelect(StatesGroup):
     waiting_for_contribution_percent = State()
     waiting_for_contribution_summa = State()
     waiting_for_contribution_extra_option = State()
+    waiting_for_contribution_extra_option_pens_off = State()
 
 
 async def contribution_name_start(message: types.Message):
@@ -50,7 +51,6 @@ async def get_contrubution_where_percent(message: types.Message, state: FSMConte
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
     user_data = await state.get_data()
     for where_percent in db.get_contribution_where_percent(user_data.get("contribution_name")):
-        print(where_percent)
         keyboard.add(where_percent)
     await OrderContributionSelect.next()
     await message.answer("Выбирите куда перечислять проценты:", reply_markup=keyboard)
@@ -94,7 +94,8 @@ async def get_contrubution_percent(message: types.Message, state: FSMContext):
     user_data = await state.get_data()
 
     if eval(user_data.get("contribution_extra_option")):
-        text_message, dict_extra_options = db.get_contribution_extra_option(user_data.get("contribution_name"))
+        text_message, dict_extra_options = db.get_contribution_extra_option(user_data.get("contribution_name"),
+                                                                            "online/offline")
 
         for schema in dict_extra_options.keys():
             keyboard.add(schema)
@@ -103,30 +104,65 @@ async def get_contrubution_percent(message: types.Message, state: FSMContext):
 
     else:
         await OrderContributionSelect.waiting_for_contribution_percent.set()
-        await message.answer(f"Для выбранного вклада {user_data.get('contribution_name')} минимальная сумма "
-                             f"{format_summ(user_data.get('contribution_min_summa'))} рублей.\n"
-                             f"Введите сумму вклада:",
-                             reply_markup=types.ReplyKeyboardRemove())
+        await message.answer(format_txt_get_summ(user_data.get('contribution_name'),
+                                             user_data.get('contribution_min_summa')),
+                             parse_mode='HTML', reply_markup=types.ReplyKeyboardRemove())
 
 
 async def get_contribution_extra_option(message: types.Message, state: FSMContext):
     user_data = await state.get_data()
-    text_message, dict_extra_options = db.get_contribution_extra_option(user_data.get("contribution_name"))
-
+    text_message, dict_extra_options = db.get_contribution_extra_option(user_data.get("contribution_name"),
+                                                                        "online/offline")
     if message.text not in dict_extra_options.keys():
         await message.answer("Пожалуйста, выбирите один из предложенных вариантов, используя клавиатуру")
         return
 
     extra_percent = dict_extra_options.get(message.text)
+
     await state.update_data(contribution_percent=round(float(user_data['contribution_percent'])
-                                                       + float(extra_percent), 2))
+                                                       + float(extra_percent), 2),
+                            contribution_extra_percent=extra_percent,
+                            contribution_extra_options=message.text)
+
+    user_data = await state.get_data()
+
+    if user_data.get("contribution_name") == "ПЕНСИОННЫЙ" and user_data.get("contribution_extra_options") == "Оффлайн":
+        keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+        text_message, dict_extra_options = db.get_contribution_extra_option(user_data.get("contribution_name"),
+                                                                            "social/sh")
+        for schema in dict_extra_options.keys():
+            keyboard.add(schema)
+        await OrderContributionSelect.waiting_for_contribution_extra_option_pens_off.set()
+        await message.answer(text_message, reply_markup=keyboard)
+
+    else:
+        await OrderContributionSelect.waiting_for_contribution_percent.set()
+        await message.answer(format_txt_get_summ(user_data.get('contribution_name'),
+                                                 user_data.get('contribution_min_summa')),
+                                                 parse_mode='HTML', reply_markup=types.ReplyKeyboardRemove())
+
+
+async def get_contribution_extra_option_soc_sh(message: types.Message, state: FSMContext):
+    user_data = await state.get_data()
+    text_message, dict_extra_options = db.get_contribution_extra_option(user_data.get("contribution_name"),
+                                                                        "social/sh")
+    if message.text not in dict_extra_options.keys():
+        await message.answer("Пожалуйста, выбирите один из предложенных вариантов, используя клавиатуру")
+        return
+
+    extra_percent = dict_extra_options.get(message.text)
+
+    await state.update_data(contribution_percent=round(float(user_data['contribution_percent'])
+                                                       + float(extra_percent), 2),
+                            contribution_extra_percent=extra_percent,
+                            contribution_extra_options=message.text)
+
     user_data = await state.get_data()
 
     await OrderContributionSelect.waiting_for_contribution_percent.set()
-    await message.answer(f"Для выбранного вклада {user_data.get('contribution_name')} минимальная сумма "
-                         f"{format_summ(user_data.get('contribution_min_summa'))} рублей.\n"
-                         f"Введите сумму вклада:",
-                         reply_markup=types.ReplyKeyboardRemove())
+    await message.answer(format_txt_get_summ(user_data.get('contribution_name'),
+                                             user_data.get('contribution_min_summa')),
+                                             parse_mode='HTML', reply_markup=types.ReplyKeyboardRemove())
 
 
 async def get_contrubution_summ(message: types.Message, state: FSMContext):
@@ -143,9 +179,11 @@ async def get_contrubution_summ(message: types.Message, state: FSMContext):
         await message.answer("Вы ввели сумму, больше максимально возможной")
         return
 
+    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    keyboard.clean()
     await state.update_data(contribution_summ=message.text)
     user_data = await state.get_data()
-    await message.answer(finish_math(user_data), parse_mode='HTML')
+    await message.answer(finish_math(user_data), parse_mode='HTML', reply_markup=types.ReplyKeyboardRemove())
 
     await state.finish()
 
@@ -158,6 +196,7 @@ def finish_math(user_data):
     vklad_summa = float(user_data.get("contribution_summ"))
     vklad_summa_first = float(user_data.get("contribution_summ"))
     vklad_where_percent = user_data.get("contribution_where_percent")
+    vklad_dop_percent = user_data.get("contribution_extra_percent")
 
     if vklad_schema == "В КОНЦЕ СРОКА" or vklad_where_percent == "НА ДРУГОЙ СЧЕТ":
         res = []
@@ -178,14 +217,34 @@ def finish_math(user_data):
             vklad_summa += summa_d
             res.append(summa_d)
 
-    result_txt = fmt.text(fmt.text("Наименование вклада:", fmt.hbold(vklad_name)),
-                          fmt.text("Длительность вклада:", fmt.hbold(vklad_day), "дней."),
-                          fmt.text("Процент по вкладу:", fmt.hbold(vklad_percent), "%"),
-                          fmt.text("Сумма вклада:", fmt.hbold(format_summ(vklad_summa_first)), "руб."),
-                          fmt.text("Сумма процентов:", fmt.hbold(format_summ(round(sum(res), 2)), "руб.")),
+    if vklad_dop_percent != 0 and vklad_dop_percent is not None:
+        result_txt = fmt.text(fmt.text("Наименование вклада:", fmt.hbold(vklad_name)),
+                     fmt.text("Длительность вклада:", fmt.hbold(vklad_day), "дней."),
+                     fmt.text("Общий процент по вкладу:", fmt.hbold(vklad_percent), "%"),
+                     fmt.text("(Включает увеличение ставки", fmt.hbold(vklad_dop_percent), "%)"),
+                     fmt.text("Сумма вклада:", fmt.hbold(format_summ(vklad_summa_first)), "руб."),
+                     fmt.text("Сумма процентов:", fmt.hbold(format_summ(round(sum(res), 2)), "руб.")),
+                     sep="\n"
+                              )
+    else:
+        result_txt = fmt.text(fmt.text("Наименование вклада:", fmt.hbold(vklad_name)),
+            fmt.text("Длительность вклада:", fmt.hbold(vklad_day), "дней."),
+            fmt.text("Процент по вкладу:", fmt.hbold(vklad_percent), "%"),
+            fmt.text("Сумма вклада:", fmt.hbold(format_summ(vklad_summa_first)), "руб."),
+            fmt.text("Сумма процентов:", fmt.hbold(format_summ(round(sum(res), 2)), "руб.")),
+            sep="\n"
+            )
+
+    return result_txt
+
+
+def format_txt_get_summ(name, min_summa):
+    result_txt = fmt.text(fmt.text("Для выбранного вклада", fmt.hbold(name)),
+                          fmt.text("минимальная сумма вклада",
+                                   fmt.hbold(format_summ(min_summa)), "руб.\n"),
+                          fmt.text("Введите сумму вклада:"),
                           sep="\n"
                           )
-
     return result_txt
 
 
@@ -195,7 +254,7 @@ def format_summ(summ):
 
 async def cmd_cancel(message: types.Message, state: FSMContext):
     await state.finish()
-    await message.answer("Действие отменено, начните заново /start", reply_markup=types.ReplyKeyboardRemove())
+    await message.answer("Действие отменено, начните заново! -> /start", reply_markup=types.ReplyKeyboardRemove())
 
 
 def register_handlers_contribution(dp: Dispatcher):
@@ -213,3 +272,5 @@ def register_handlers_contribution(dp: Dispatcher):
                                 state=OrderContributionSelect.waiting_for_contribution_percent)
     dp.register_message_handler(get_contribution_extra_option,
                                 state=OrderContributionSelect.waiting_for_contribution_extra_option)
+    dp.register_message_handler(get_contribution_extra_option_soc_sh,
+                                state=OrderContributionSelect.waiting_for_contribution_extra_option_pens_off)
