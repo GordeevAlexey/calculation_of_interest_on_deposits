@@ -14,6 +14,7 @@ async def set_commands(dp) -> None:
 
 
 async def main():
+
     bot_percent = Bot(token=BOT_TOKEN)
     dp = Dispatcher(bot_percent, storage=MemoryStorage())
     register_handlers_contribution(dp)
@@ -21,4 +22,5 @@ async def main():
     await dp.start_polling()
 
 if __name__ == '__main__':
+
     asyncio.run(main())
